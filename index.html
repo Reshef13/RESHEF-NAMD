@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>רשף - RESHEF</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Core Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- GSAP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <!-- Three.js Post-Processing Dependencies (Must be loaded after Three.js) -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Karantina:wght@300;400;700&family=Rubik+Glitch&family=Rubik+Dirt&family=Rubik+Gemstones&family=Rubik+Wet+Paint&family=Rubik:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+      body {
+        background-color: #050505;
+        color: #e5e5e5;
+        margin: 0;
+        overflow-x: hidden;
+      }
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #111;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #444;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #666;
+      }
+
+      /* Animations */
+      @keyframes scanline {
+        0% { transform: translateY(-100%); }
+        100% { transform: translateY(100%); }
+      }
+      .animate-scanline {
+        animation: scanline 4s linear infinite;
+      }
+
+      @keyframes glitch-skew {
+        0% { transform: skew(0deg); }
+        20% { transform: skew(-2deg); }
+        40% { transform: skew(2deg); }
+        60% { transform: skew(-1deg); }
+        80% { transform: skew(1deg); }
+        100% { transform: skew(0deg); }
+      }
+      .animate-glitch {
+        animation: glitch-skew 1s infinite linear alternate-reverse;
+      }
+
+      @keyframes tv-off {
+        0% { transform: scale(1, 1); opacity: 1; }
+        60% { transform: scale(1, 0.005); }
+        100% { transform: scale(0, 0); opacity: 0; }
+      }
+      .animate-tv-off {
+        animation: tv-off 0.5s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+      }
+
+      /* Three.js UI Styles */
+      .hud {
+        position: absolute;
+        padding: 20px;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.7);
+        pointer-events: none;
+        z-index: 10;
+        text-shadow: 0 0 2px black;
+      }
+      .hud-tl { top: 0; left: 0; }
+      .hud-tr { top: 0; right: 0; text-align: right; }
+      .hud-bl { bottom: 0; left: 0; }
+      .hud-br { bottom: 0; right: 0; text-align: right; }
+
+      .narrative-container {
+        position: absolute;
+        bottom: 15%;
+        left: 50%;
+        transform: translateX(-50%);
+        text-align: center;
+        color: white;
+        z-index: 5;
+        pointer-events: none;
+        transition: opacity 0.5s, transform 0.5s;
+        width: 80%;
+      }
+      .narrative-container.playpen-mode {
+         bottom: 5%;
+         transform: translateX(-50%) scale(0.8);
+      }
+      .narrative-container h1 {
+        font-family: 'Karantina', sans-serif;
+        font-size: 4rem;
+        margin: 0;
+        text-shadow: 0 0 10px rgba(255,255,255,0.5);
+      }
+      .narrative-container p {
+        font-family: 'Rubik', sans-serif;
+        font-size: 1.2rem;
+        color: #aaa;
+        margin-top: 10px;
+        background: rgba(0,0,0,0.5);
+        padding: 5px 10px;
+        display: inline-block;
+      }
+      .progress-bar {
+        width: 100px;
+        height: 4px;
+        background: #333;
+        margin-top: 5px;
+        display: inline-block;
+      }
+      .progress-fill {
+        height: 100%;
+        background: #0f0;
+        width: 0%;
+      }
+      #social-links {
+        position: absolute;
+        top: 50%;
+        right: 20px;
+        transform: translateY(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        z-index: 20;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.5s;
+      }
+      #social-links.visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .social-icon svg {
+        width: 24px;
+        height: 24px;
+        fill: white;
+        transition: fill 0.3s;
+      }
+      .social-icon:hover svg {
+        fill: #f00;
+      }
+      #interaction-prompt {
+        position: absolute;
+        bottom: 20px;
+        width: 100%;
+        text-align: center;
+        font-family: monospace;
+        font-size: 10px;
+        color: #666;
+        z-index: 5;
+        animation: blink 2s infinite;
+      }
+      @keyframes blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+      
+      .fullscreen-btn {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        z-index: 50;
+        background: transparent;
+        border: none;
+        color: white;
+        cursor: pointer;
+        opacity: 0.5;
+        transition: opacity 0.3s;
+      }
+      .fullscreen-btn:hover { opacity: 1; }
+      .fullscreen-btn svg { width: 24px; height: 24px; }
+
+      /* Game UI */
+      #game-ui {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 40;
+        text-align: center;
+        pointer-events: none; 
+      }
+      .game-header {
+        pointer-events: auto;
+        margin-bottom: 20px;
+      }
+      .game-btn {
+        background: rgba(0,0,0,0.8);
+        border: 1px solid white;
+        color: white;
+        padding: 10px 20px;
+        font-family: monospace;
+        cursor: pointer;
+        margin: 0 5px;
+      }
+      .game-controls-mobile {
+        display: none; 
+        pointer-events: auto;
+        position: relative;
+        width: 150px;
+        height: 150px;
+        margin: 0 auto;
+      }
+      @media (max-width: 768px) {
+        .game-controls-mobile { display: block; }
+      }
+      .dpad-btn {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        user-select: none;
+      }
+      .dpad-btn svg { width: 20px; height: 20px; fill: white; }
+      .dpad-up { top: 0; left: 55px; }
+      .dpad-down { bottom: 0; left: 55px; }
+      .dpad-left { top: 55px; left: 0; }
+      .dpad-right { top: 55px; right: 0; }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
